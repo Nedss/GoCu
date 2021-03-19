@@ -67,7 +67,7 @@ func getRandomWord(wordList []string) (string, error) {
 	wordNumber := len(wordList)
 	number, err := randNumber(wordNumber)
 	if err != nil {
-		log.Fatal("Cannot get max number")
+		log.Fatal("Cannot get max number ", err)
 	}
 
 	word := wordList[number]
