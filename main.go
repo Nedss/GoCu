@@ -28,14 +28,14 @@ func init() {
 }
 
 func main() {
-
 	discordBot, err := discordgo.New("Bot " + Token)
 	if err != nil {
 		log.Fatal("error creating Discord session", err)
 		return
 	}
 
-	discordBot.AddHandler(messageCreate)
+	discordBot.AddHandler(commandCreate)
+	discordBot.AddHandler(interactionCreate)
 
 	// Only listen receiving message events
 	discordBot.Identify.Intents = discordgo.IntentsGuildMessages
@@ -63,7 +63,6 @@ func randNumber(max int) (int, error) {
 }
 
 func getRandomWord(wordList []string) (string, error) {
-
 	wordNumber := len(wordList)
 	number, err := randNumber(wordNumber)
 	if err != nil {
@@ -72,11 +71,9 @@ func getRandomWord(wordList []string) (string, error) {
 
 	word := wordList[number]
 	return word, nil
-
 }
 
 func parseDict(dictionaryPath string) ([]string, error) {
-
 	dictFile, err := os.Open(dictionaryPath)
 	if err != nil {
 		log.Fatal("cannot open dictionary file : ", err)
@@ -96,29 +93,56 @@ func parseDict(dictionaryPath string) ([]string, error) {
 	}
 
 	return lines, nil
-
 }
 
-func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
-	if m.Author.ID == s.State.User.ID {
+func commandCreate(s *discordgo.Session, event *discordgo.Ready) {
+	_, err := s.ApplicationCommandCreate(s.State.User.ID, "", &discordgo.ApplicationCommand{
+		Name:        "cul",
+		Description: "Fais lire aléatoirement le dictionnaire du cul au bot.",
+	})
+	if err != nil {
+		log.Fatal("Cannot create command:", err)
+		return
+	}
+}
+
+func messageCreate() (string, error) {
+	wordList, err := parseDict(DictPath)
+	if err != nil {
+		return "", fmt.Errorf("error parsing dictionary file %d\n", err)
+	}
+
+	word, err := getRandomWord(wordList)
+	if err != nil {
+		return "", fmt.Errorf("cannot get a word from dictionary %d\n", err)
+	}
+	fmt.Println("Returning : ", word)
+	completeSentence := word + " du cul !"
+	// s.ChannelMessageSendReply(m.ChannelID, completeSentence, m.Reference())
+	return completeSentence, nil
+}
+
+func interactionCreate(
+	s *discordgo.Session,
+	i *discordgo.InteractionCreate,
+) {
+	if i.ApplicationCommandData().Name != "cul" {
 		return
 	}
 
-	fmt.Println("Recieve a message.")
-	if m.Content == "/cul" && m.ChannelID == "416633161330589697" {
-		wordList, err := parseDict(DictPath)
-		if err != nil {
-			log.Fatal("error parsing dictionary file", err)
-			return
-		}
+	var response string
+	var err error
+	response, err = messageCreate()
 
-		word, err := getRandomWord(wordList)
-		if err != nil {
-			log.Fatal("cannot get a word from dictionary", err)
-			return
-		}
-		fmt.Println("Returning : ", word)
-		completeSentence := word + " du cul !"
-		s.ChannelMessageSendReply(m.ChannelID, completeSentence, m.Reference())
+	fmt.Println("Recieve a message.")
+	err = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: response,
+		},
+	})
+	if err != nil {
+		log.Fatal("error sending interaction response", err)
+		return
 	}
 }
